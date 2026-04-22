@@ -1,145 +1,128 @@
-# Dusk Downgrade: Automatic iOS 10-15 Downgrade Tool For A9 and A10 iDevices.
+# Samuel's iPad Downgrade: Automated Tethered Downgrades (iOS 10.0.1-17.7.9) for A9 & A10 Devices
 
-_By Alex Free_
+*Maintained and updated by Samuel Bowers*
 
-Apple sunsets your iDevice? Introducing Dusk Downgrade. A completely automatic solution that tether downgrades to iOS 10-iOS 15 for A9 and A10 devices. Made possible by the work of many [others](#credits).
+Don’t let your older iDevices go to a landfill. **Samuel's iPad Downgrade** is a streamlined utility that automates the process of performing tethered downgrades to iOS versions 10.0.1 through 17.7.9 on devices equipped with A9, A9X, A10, and A10X chips. This project integrates several community-driven tools into a single, user-friendly workflow.
 
-If your looking for iOS 9 on iPhone 6S or iPhone 6S Plus, check out my other project [A999 Activator](https://github.com/alex-free/a999activator).
+---
 
-* There's many things you can do on iOS 10+ that perhaps you didn't think you still could, here's just a [few](#interesting-things-to-do-on-legacy-ios).
+### Key Resources
+*   **Version History:** See the [Changelog](changelog.md) for past updates.
+*   **Use Cases:** Discover [Practical uses for Legacy iOS](#legacy-ios-use-cases).
+*   **Guidelines:** Review the [Essential Information](#essential-information) before starting.
+*   **Support:** Consult the [Troubleshooting/FAQ](#troubleshooting-and-faq) section or [open a new Github issue](https://github.com/SamuelTogepi/Samuel-siPadDowngrade/issues/new?template=issue.md) if you encounter problems.
 
-* To find out what iOS version is right for you to downgrade to, please check the [Important Info](#important-info) section.
+---
 
-* Please check the [FAQ](#faq) section for more information and solutions. If you have an issue, please open a [Github issue](https://github.com/alex-free/dusk-downgrade/issues/new?template=issue.md) and fill out the information.
+### Compatible Hardware
+*   iPad 5th gen
+*   iPad Pro 9.7-inch
+*   iPad Pro 12.9-inch
+*   iPad 6th gen
+*   iPad Pro 10.5-inch
+*   iPad Pro 12.9-inch
 
-Supported devices:
+| [Project Repository](https://github.com/SamuelTogepi/Samuel-siPadDowngrade) | [Official Homepage](https://github.com/Samuel-siPadDowngrade) |
 
-* iPhone 6S.
-* iPhone 6S Plus.
-* iPhone SE.
-* iPhone 7.
-* iPhone 7 Plus.
+---
 
-| [Github](https://github.com/alex-free/dusk-downgrade) | [Homepage](https://github.com/alex-free/dusk-downgrade) |
+## Table of Contents
+1.  [Downloads](#downloads)
+2.  [Essential Information](#essential-information)
+3.  [System Requirements](#system-requirements)
+4.  [Instructions](#instructions)
+5.  [Legacy iOS Use Cases](#legacy-ios-use-cases)
+6.  [Troubleshooting and FAQ](#troubleshooting-and-faq)
+7.  [Project Credits](#project-credits)
+8.  [Licensing](#licensing)
+9.  [Build Guide](build.md)
 
-# Table Of Contents
-
-* [Downloads](#downloads)
-* [Important Info](#important-info)
-* [Usage](#usage)
-* [FAQ](#faq)
-* [Credits](#credits)
-* [License](#license)
-* [Building](build.md)
+---
 
 ## Downloads
+Dusk Downgrade is compatible with Debian and Fedora Linux, as well as macOS 10.12 or later. It supports both x86_64 and ARM64 architectures.
 
-A999 Activator is designed to work on Debian, Fedora, and Mac OS 10.12 or newer. x86_64 and ARM64 arches are supported. Other Linux distros are not yet supported.
+### Latest Release: v2.0.4 (March 14, 2026)
+*   [**samuel-siPadDowngrade.zip**] (Universal package for macOS and Linux)
 
-### Version 2.0.4 (3/14/2026)
+**What’s New:**
+*   Enhanced stability for Fedora users via the latest [idevice-tool-kit](https://github.com/alex-free/idevice-tool-kit) updates. Credits to Alex-Free, I'm sorry for copying a999
 
-* [dusk-downgrade-v2.0.4.zip](https://github.com/alex-free/dusk-downgrade/releases/download/v2.0.4/dusk-downgrade-v2.0.4.zip) _For Mac OS and for Linux_
+---
 
-Changes:
+## Essential Information
+*   **A10X & iOS 10 Warning:** Restoring an A10 device to iOS 10 may result in activation or cellular/baseband failures. In many cases, you can still use the device via WiFi by enabling Airplane Mode. A9 devices and any devices running iOS 11 or higher are generally unaffected by this.
+*   **Patience is Key:** Particularly on A10/A10X devices running iOS 10/11, the boot or restore process may require several attempts before succeeding. Persistence is usually rewarded!
 
-* Fedora Linux reliability improvements thanks to updated [idevice-tool-kit](https://github.com/alex-free/idevice-tool-kit).
+---
 
-[Previous versions](changelog.md)
+## System Requirements
+### macOS
+*   Version 10.11 (El Capitan) or higher.
+*   An active installation of [Homebrew](https://brew.sh/) or [MacPorts](https://www.macports.org/install.php).
 
-## Important Info
+### Linux
+*   Fedora or Debian (x86_64 / arm64 architecture).
 
-* If you have an A10 device and restore to iOS 10, you may have baseband/cellular/activation issues. If you can activate and have baseband issues, you can of course enable airplane mode and just use WiFi. iOS 11 and up do not have any of these problems, and neither does A9 on iOS 10 or any version.
+---
 
-* When restoring iOS 11 or iOS 10, espically on A10, it may fail many times when booting or restoring... It really does work eventually!
+## Instructions
+1.  Download and unzip the most recent software package.
+2.  Launch your Terminal.
+3.  To run the tool, type `./samuel` followed by a space, then drag your chosen `.ipsw` file into the terminal window.
+    *   **Linux Users:** You must run this with root permissions: `sudo ./samuel <ipsw_file>`.
+    *   **macOS Users:** Sudo is not required.
+4.  Interact with the on-screen prompts to complete the process.
 
-## Requirements
+---
 
-Mac requirements:
+## Legacy iOS Use Cases
+Wondering what you can do on an older firmware?
+*   **App Compatibility:** Many apps, including GarageBand, remain functional via the App Store.
+*   **Ad-Free Video:** Safari-based YouTube allows you to bypass many ads simply by refreshing the page.
+*   **Communication:** FaceTime and iMessage sync correctly with modern iPhones.
+*   **Daily Driving:** These devices remain capable of basic tasks. For example, T-Mobile and Mint Mobile (USA) have been confirmed to work even on the oldest supported firmwares.
 
-* Mac OS 10.12 or newer.
+---
 
-* Either the [MacPorts](https://www.macports.org/install.php) or [Homebrew](https://brew.sh/) package manager installed.
+## Troubleshooting and FAQ
 
-Linux requirements:
+**The tool is stuck on "Waiting for Restore Mode."**
+Perform a hard reset (Power + Home) and restart the process. Early iOS 11 builds on A10X hardware often require multiple tries.
 
-* Fedora or Debian Linux (x86_64 or arm64).
+**Fedora Linux is not recognizing my iPhone.**
+If this is your first time using the tool on Fedora, reboot your workstation and try the process again.
 
-## Usage
+**The process is hung on "Checkmate."**
+Briefly unplug the Lightning cable and plug it back in to trigger the next step.
 
-1) Download the latest release and extract it.
+**I see a "Failed to open handle" error after Checkmate.**
+On Linux (especially A10/A10X), this error often resolves itself. For A9, reconnect the cable; the error may appear again, but it should not be fatal to the process.
 
-2) Execute it in Terminal (this is a command line program). Drag the `dusk` command into your Terminal window and press enter. Or if you want, cd into the extracted release and:
+**The restore failed.**
+When prompted to re-enter DFU mode, disconnect and reconnect your cable before proceeding. The subsequent attempt usually succeeds.
 
-`./dusk <drag your ipsw file here>`
+**How do I restart the device after it powers off?**
+Because this is a tethered downgrade, you must use the `boot` command generated during the initial install. Put your device into Recovery Mode, connect it to your PC, and execute the `boot*` script found in your Dusk Downgrade folder.
 
-Note that on Linux you must run `dusk` with root privilages, i.e. `sudo ./dusk <drag your ipsw file here>`. On Mac you do not need to do this.
+**The device isn't being detected at all.**
+Ensure you are using a USB-A to Lightning cable. Avoid USB-C to Lightning cables if possible; if your computer only has USB-C ports, use a USB-A adapter.
 
-3) Follow the prompts.
+**Why is the first run so slow?**
+The initial setup performs several one-time configurations and caches data. Subsequent downgrades will be much faster because the tool utilizes the `data` folder. **Always back up your `data` folder and `boot` scripts**, as they are unique to your specific device.
 
-## Interesting Things To Do On Legacy iOS
+---
 
-* Instagram still works from the AppStore.
+## Project Credits
+This utility is made possible by the foundational work of:
+*   **The Sep.lol Team:** Creators of the *turdus merula* exploit.
+*   **LukeZGD:** Developer of [Legacy-iOS-Kit](https://github.com/LukeZGD/Legacy-iOS-Kit).
+*   **Alex-Free:** For the idea from Dusk-Downgrader and everything to fork from this
 
-* YouTube in Safari works. When you get an AD, refresh and it goes away!
+---
 
-* You can send/recieve FaceTime calls and iMessages to your main iPhone.
-
-* You can use it as your main iPhone (I did for a few weeks on a 6S Plus). T-Mobile/Mint Mobile in the USA are confirmed working carriers for even the lowest iOS this supports.
-
-## FAQ
-
-### Stuck At Waiting For Restore Mode
-
-Force restart (power+volume down for iPhone 7/+ or home+power for 6S/+) then try again. May take multiple tries, espically with early iOS 11 builds and A10.
-
-### My iPhone Won't Detect On Fedora Linux
-
-This may happen the first time you ever use Dusk Downgrade on Fedora Linux. Reboot your computer, and try Dusk Downgrade again. 
-
-### Stuck on Checkmate?
-
-Disconnect and reconnect the lightning cable to get past it.
-
-### Error Failed To Open Handle (No Device) After Checkmate?
-
-It appears on Linux for A10 this can appear and "fix itself". For A9 not so much.... Disconnect and reconnect the lightning cable to get past it if A9. The error will appear again but be non-fatal and work.
-
-### Unable To Successfully Restore Device
-
-Wait until your prompted to enter DFU Mode again, and before you do disconnect and reconnect the lightning cable. The next restore should work.
-
-### How Do I Boot My Downgraded iPhone If The Battery Dies Or I Turn It Off?
-
-In the same folder that the `dusk` command is in, there will be a new command starting with `boot` which is generated after a successful downgrade automatically. All you have to do is execute that command starting with `boot` while your iPhone is in Recovery Mode and connected to your computer.
-
-### Why Is My iPhone Not Detected?
-
-Make sure your using a USB-A to lightning cable. If you have to, you can also use a USB-C to USB-A adapter with the USB-A lightning cable plugged into it. If you are using a USBA-A lightning cable correctly, try unplugging the cable and then plugging it back in. Then execute `dusk` again.
-
-### Why Does It Take So Long? You Say It's Much Faster The Next Time You Run It?
-
-On the first run of Dusk Downgrade, there are many additional steps in the proccess that will trigger automatically for you. **Subsequent runs will be signifigantly shorter and take fewer steps as it caches needed data from the first run locally in the `data` folder.** That `data` folder is very important and personalized to your iPhone. You should back it up because you can put it back in any future dusk downgrade release and it will use that data when it detects your iPhone!
-
-Similar to the data folder are the `boot*` scripts. These get generated once your iPhone downgrades successfully automatically, and are also personalized to your iPhone and should be backed up so you can reboot the iPhone from Recovery Mode if it dies or your turn it off.
-
-You can also use the `dusk` command to transfer your `data` and `boot*` files from a previous release of Dusk Downgrade:
-
-`./dusk -u <path to new update of Dusk Downgrade>`
-
-### How Are Errors Handled?
-
-Certian aspects of Turdus_ra1n (exploiting SEP, booting exploited iOS) can fail the first time. This is why Dusk Downgrade has very extensive if-fail-then-retry logic. It will eventually work, and it won't continue the proccess until it does. So don't be discouraged when it says `Something went wrong, lets try that again` because it's really just working as intended and trying again (sometimes many times to get that PTEBlock) does eventually work out. One exception to this is if turdusra1n/turdus_merula crashes at `- <Log> checkm8 setup stage`. If your stuck here for a long time (more then 30 seconds) I would `ctrl+c` to exit dusk downgrade, unpulg the USB-A to Lightning cable from the USB port on the Mac, then plug it back in before running the `dusk` command again. Unfortunately I don't have a better solution for this yet as it is a turdus merula problem. In a similar vein to above, if you fail to enter DFU mode when prompted or the custom ramdisk fails to boot dusk downgrade notices this and goes back to correct it.
-
-## Credits
-
-* [Sep.lol team](https://sep.lol/) for turdus merula.
-
-* [LukeZGD](https://github.com/LukeZGD) for [Legacy-iOS-Kit](https://github.com/LukeZGD/Legacy-iOS-Kit).
-
-## License
-
-Dusk Downgrade itself is released under the 3-BSD license, see [license.md](license.md). Dusk Downgrade uses many other dependency programs which are not under that license, such as:
-
-* Turdus Merula (closed source, open source is planned).
-
-* Legacy-iOS-Kit (GNU GPL v3.0). This uses my [forked version](https://github.com/alex-free/Legacy-iOS-Kit) by the way.
+## Licensing
+Samuel's iPad Downgrade is distributed under the **3-BSD License** (refer to `license.md`). Please note that this tool relies on third-party dependencies governed by their own licenses:
+*   **Turdus Merula:** Currently closed source.
+*   **Legacy-iOS-Kit:** Licensed under GNU GPL v3.0.
+*   **Dusk Downgrade Scripting:** 3-BSD.
