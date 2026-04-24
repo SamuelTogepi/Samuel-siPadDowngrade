@@ -42,11 +42,11 @@ Don’t let your older iDevices go to a landfill. **Samuel's iPad Downgrade** is
 ## Downloads
 Dusk Downgrade is compatible with Debian and Fedora Linux, as well as macOS 10.12 or later. It supports both x86_64 and ARM64 architectures.
 
-### Latest Release: v2.0.4 (March 14, 2026)
+### Latest Release: v1.0 (March 14, 2026)
 *   [**samuel-siPadDowngrade.zip**] (Universal package for macOS and Linux)
 
 **What’s New:**
-*   Enhanced stability for Fedora users via the latest [idevice-tool-kit](https://github.com/alex-free/idevice-tool-kit) updates. Credits to Alex-Free, I'm sorry for copying a999
+*   Enhanced stability for Fedora users via the latest [idevice-tool-kit](https://github.com/alex-free/idevice-tool-kit) updates. Credits to Alex-Free, I'm sorry for copying a999, but I will redo what I did, and redo the activation method for iPad Pro 9.7 once I get one
 
 ---
 
@@ -69,8 +69,8 @@ Dusk Downgrade is compatible with Debian and Fedora Linux, as well as macOS 10.1
 ## Instructions
 1.  Download and unzip the most recent software package.
 2.  Launch your Terminal.
-3.  To run the tool, type `./samuel` followed by a space, then drag your chosen `.ipsw` file into the terminal window.
-    *   **Linux Users:** You must run this with root permissions: `sudo ./samuel <ipsw_file>`.
+3.  To run the tool, type `./samueldowngrade` followed by a space, then drag your chosen `.ipsw` file into the terminal window.
+    *   **Linux Users:** You must run this with root permissions: `sudo ./samueldowngrade <ipsw_file>`.
     *   **macOS Users:** Sudo is not required.
 4.  Interact with the on-screen prompts to complete the process.
 
