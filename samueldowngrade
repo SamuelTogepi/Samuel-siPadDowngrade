@@ -86,7 +86,7 @@ fi
 # IPSW Input Validation
 if [[ ! -f "$1" ]]; then
     echo "Error: You must provide a path to an iPad IPSW file."
-    echo "Usage: ./samuel-ipad-downgrade [path_to_ipsw]"
+    echo "Usage: ./samueldowngrade [path_to_ipsw]"
     exit 1
 fi
 
