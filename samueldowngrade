@@ -1,179 +1,173 @@
-version=1.0.0
-real_portable_folder="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$real_portable_folder"
-# Log file.
-exec > >(tee log.txt) 2>&1
-# Load common functions.
+#!/bin/bash
 
-check_if_additional_restore_is_needed() {
+# ============================================================
+# Samuel's iPad Downgrade
+# Targeted for A9/A10/A10X iPads
+# Version: 1.0.0
+# ============================================================
 
-    get_ver "$1"
+SAM_VER="1.0.0"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$BASE_DIR"
 
-    if [ "$ver" = "10.0.1_14A403" ] || \
-    [ "$ver" = "10.0.2_14A456" ] || \
-    [ "$ver" = "10.0.3_14A551" ] || \
-    [ "$ver" = "10.1_14B72c" ] || \
-    [ "$ver" = "10.1.1_14B100" ] || \
-    [ "$ver" = "10.1.1_14B150" ] || \
-    [ "$ver" = "10.2_14C92" ] || \
-    [ "$ver" = "10.2.1_14D27" ] || \
-    [ "$ver" = "10.3_14E277" ] || \
-    [ "$ver" = "10.3.1_14E304" ] || \
-    [ "$ver" = "10.3.2_14F89" ]; then
-        echo "Info: need to restore iOS 10.3.3 first."
-    else
-        return
-    fi
+# Enable logging via Process Substitution
+exec > >(tee session_log.txt) 2>&1
 
-    # Needed for iOS 10.0.1-iOS 10.3.2
-    if [ $device == "iPad_5th_gen" ]; then
-        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23331-20170719-CA996666-6977-11E7-81A4-399100BA0AE3/iPad_6,11_iPad_6,12_10.3.3_14G60_Restore.ipsw
-    elif [ $device == "iPad_Pro_12.9" ]; then
-        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23269-20170719-CA961588-6977-11E7-9128-309100BA0AE3/iPadPro_12.9_10.3.3_14G60_Restore.ipsw
-    elif [ $device == "iPad_Pro_9.7" ]; then
-        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23144-20170719-CA94A540-6977-11E7-85B4-2D9100BA0AE3/iPadPro_9.7_10.3.3_14G60_Restore.ipsw
-    elif [ $device == "iPad_Pro_10.5" ]; then
-        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23306-20170719-CA9ADE92-6977-11E7-9D4A-379100BA0AE3/iPad_7,3_iPad_7,4_10.3.3_14G60_Restore.ipsw
-    elif [ $device == "iPad_Pro_12.9" ]; then
-        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23342-20170719-CA9AC9E8-6977-11E7-9507-3C9100BA0AE3/iPad_7,1_iPad_7,2_10.3.3_14G60_Restore.ipsw
-    fi
+# --- Global Variables ---
+SYS_OS="$(uname)"
+SYS_ARCH="$(uname -m)"
+IPAD_MODEL=""
+IS_A9_CHIP=false
+FIRMWARE_VER=""
+BOOT_VER=""
+SERIAL_NUM=""
+IS_IN_RECOVERY=false
+IS_PRELIMINARY_RESTORE=true
+
+echo "================================================"
+echo "    Samuel's iPad Downgrade Utility v$SAM_VER"
+echo "================================================"
+
+# ============================================================
+# 1. HELPER UTILITIES
+# ============================================================
+
+refresh_usbmux() {
+    killall usbmuxd > /dev/null 2>&1
+    usbmuxd > /dev/null 2>&1
 }
 
-echo -e "Samuel 's-iPadDowngrade."
+pair_ipad(){
+    idevicepair pair >/dev/null 2>&1
+}
 
-# Update functionality. We need to get 2 things: the data folder and any boot* scripts.
-if [ "$1" == "-u" ]; then
+restrict_auto_boot() {
+    echo "Configuring environment to prevent auto-booting..."
+    irecovery -c "setenv auto-boot false"
+    irecovery -c "saveenv"
+}
 
-    if [ "$#" -ne 2 ]; then
-        echo "You gave the -u argument, which expects an existing Samuel's iPad downgrade release directory as the following argument."
-        exit 1
-    fi
+await_recovery_mode() {
+    until irecovery -m 2>/dev/null | grep -q "Recovery Mode"; do
+        if irecovery -m 2>/dev/null | grep -q "DFU Mode"; then
+            echo "Action Required: iPad is in DFU Mode. Please manually reboot it into Recovery Mode using the hardware buttons."
+        fi
+        sleep 1
+    done
+}
 
-    update_existing_data "$2"
-    exit 0
-fi
+run_exploit_sequence() {
+    await_recovery_mode
+    until turdusra1n -D; do
+        echo "Exploit failed. Re-attempting..."
+        sleep 1
+    done
+}
 
-if [ ! -f "$1" ]; then
-    echo -e "Error: you must provide an ipsw to Samuel's iPad downgrade.\nUsage:\n\samueldowngrade <ipsw file>"
-    exit 1
-fi
+parse_firmware_details() {
+    local ipsw_file="$1"
+    # Extracts the version and build string (e.g., 10.3.3_14G60)
+    FIRMWARE_VER=$(echo "$ipsw_file" | sed -E 's/.*_(.*_.*)_Restore\.ipsw/\1/')
+    # Extracts just the version string (e.g., 10.3.3) for A10 boot scripts
+    BOOT_VER=$(echo "$ipsw_file" | sed -E 's/.*_(.*)_(.*)_Restore\.ipsw/\1/')
+}
+
+# ============================================================
+# 2. ENVIRONMENT SETUP
+# ============================================================
 
 set_path() {
-
-    # OS/arch detection.
-    # Add all the self-contained binaries we need to the $PATH used within this script.
-    if [ "$os" = "Linux" ]; then
-
-        if [ "$arch" = "x86_64" ]; then
-            PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/linux/x86_64:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin"
-        elif [ "$arch" = "arm64" ]; then
-            PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/linux/arm64:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin"
+    local bin_base="$BASE_DIR/bin"
+    local legacy_base="$bin_base/Legacy-iOS-Kit/bin"
+    
+    if [[ "$SYS_OS" == "Linux" ]]; then
+        if [[ "$SYS_ARCH" == "x86_64" ]]; then
+            PATH="${PATH:+$PATH:}$bin_base:$legacy_base/linux/x86_64:$bin_base/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin"
+        elif [[ "$SYS_ARCH" == "arm64" ]]; then
+            PATH="${PATH:+$PATH:}$bin_base:$legacy_base/linux/arm64:$bin_base/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin"
         else
-            echo "Error: Linux on $arch is not supported."
+            echo "Error: Linux architecture $SYS_ARCH is not supported."
             exit 1
         fi
-
-        echo "Detected Linux on $arch."
-
-    elif [[ "$os" == "Darwin" ]]; then
-        PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/macos:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_macos/bin"
-        echo "Detected Mac OS on $arch."
+        echo "Configured environment for Linux ($SYS_ARCH)."
+    elif [[ "$SYS_OS" == "Darwin" ]]; then
+        PATH="${PATH:+$PATH:}$bin_base:$legacy_base/macos:$bin_base/turdus_m3rula_1.1_b0ea3ee7_macos/bin"
+        echo "Configured environment for macOS."
     else
-        echo "Error: $os is not supported."
+        echo "Error: Operating system $SYS_OS is not supported."
         exit 1
     fi
-
-    echo "PATH: $PATH"    
 }
 
 startup() {
-
-if [ ! -d data ]; then
-        echo "Creating data folder..."
-        mkdir data
-    else
-        echo "Loaded existing data folder!"
-    fi
-
-    # Create ipsw directory if it does not exist.
+    [[ ! -d data ]] && mkdir data && echo "Workspace initialized." || echo "Found existing data folder."
     mkdir -p data/ipsw
 
-    if [ "$os" = "Linux" ]; then
-        # On Linux we need root.
-        if [ "$EUID" -ne 0 ]; then
-            echo "Error: a999 must be ran with root privileges on Linux. Please execute it with sudo or as the root user to continue."
+    if [[ "$SYS_OS" == "Linux" ]]; then
+        if [[ "$EUID" -ne 0 ]]; then
+            echo "Error: Samuel's iPad Downgrade requires root privileges on Linux. Run with sudo."
             exit 1
         fi
     fi
 
-    if [ ! -f "bin/Legacy-iOS-Kit/resources/firstrun" ]; then
+    if [[ ! -f "bin/Legacy-iOS-Kit/resources/firstrun" ]]; then
         (cd bin/Legacy-iOS-Kit && ./restore.sh --no-version-check --no-internet-check)
-        # This is to account for LibUSB being just installed.
 
-        if [ "$os" = "Linux" ]; then
+        if [[ "$SYS_OS" == "Linux" ]]; then
             if command -v dnf >/dev/null; then
-                # More deps.
                 dnf install -y libimobiledevice libimobiledevice-utils expect idevicerestore irecovery
-                # Crypto libraries for lockdown.
                 update-crypto-policies --set LEGACY > /dev/null 2>&1
-                echo "Fedora users may need to reboot now before running a999 again! If it doesn't work, reboot and try again."
-
+                echo "Fedora users: If the script hangs, reboot your PC and try again."
             elif command -v apt >/dev/null; then
-                apt install --yes expect libimobiledevice libimobiledevice-utils expect idevicerestore irecovery
+                apt update && apt install -y expect libimobiledevice libimobiledevice-utils idevicerestore irecovery
             fi
         fi
 
-        read -p "Please disconnect then reconnect your USB-A Lightning cable to ensure the iPa can be detected.Then press any key to continue..."
+        echo "Dependencies installed. Disconnect and reconnect your iPad's USB cable, then press Enter."
+        read -r
     fi
 
-    # Additional setup.
-    if [ "$os" = "Linux" ]; then
-        # https://github.com/alex-free/a999activator/issues/8#issuecomment-3383734504
-        if command -v dnf >/dev/null; then
-            # Crypto libraries for lockdown.
-            update-crypto-policies --set LEGACY > /dev/null 2>&1
-            # Crypto policies usually require a reboot to take effect but let's just be thorough here...
-            # Set SE linux to permissive (resets on Reboot)
-            setenforce 0
-        fi
-    elif [ "$os" = "Darwin" ]; then
-        # All these executables are signed so that is the only think preventing gatekeeper from allowing the script to be automatic is the quarintine attributes.
-        # Remove any quarintine attributes in this folder.
+    # Fix OS-specific permissions
+    if [[ "$SYS_OS" == "Linux" && -x "$(command -v dnf)" ]]; then
+        update-crypto-policies --set LEGACY > /dev/null 2>&1
+        setenforce 0 2>/dev/null
+    elif [[ "$SYS_OS" == "Darwin" ]]; then
         xattr -rc .
-    else
-        echo "Error: unsupported operating system!"
-        exit 1
     fi
 }
 
-detect_ipad() {
+update_existing_data() {
+    if [[ -d "$1/data" ]]; then
+        echo "Migrating data from $1..."
+        cp -rv "$1/data" .
+    else
+        echo "Error: Could not locate the data folder in $1."
+        exit 1
+    fi
+    cp -rv "$1"/boot-* . 2>/dev/null 
+}
 
-# ---------------------------------------------------------
-# iPad Detection & Environment Setup
-# Models Supported: iPad 5, 6, Pro 9.7, Pro 10.5, Pro 12.9
-# ---------------------------------------------------------
+# ============================================================
+# 3. CORE LOGIC
+# ============================================================
 
 scan_for_ipad() {
-    # Initialize usbmuxd in polling mode on Linux for better detection
     if [[ "$SYS_OS" == "Linux" ]]; then
         usbmuxd_restart_polling > /dev/null 2>&1
     fi
 
-    echo "Scanning for a compatible A9 or A10 iPad via USB-A..."
+    echo "Scanning for a compatible A9 or A10 iPad via USB..."
 
-    # DFU mode check: Serial Number isn't visible here, so we must exit to Recovery
     if irecovery -m 2>/dev/null | grep -q "DFU Mode"; then
-        echo "Device is currently in DFU Mode. Please reboot it into Recovery Mode to continue."
+        echo "Device is currently in DFU Mode. Please reboot it into Recovery Mode."
         await_recovery_mode
     fi
 
-    # Detection Loop
     while true; do
         if irecovery -m 2>/dev/null | grep -q "Recovery Mode"; then
             echo "Status: iPad identified in Recovery Mode."
-            IS_RECOVERY_PHASE=true
+            IS_IN_RECOVERY=true
             
-            # Extract hardware details
             local rec_data=$(irecovery -q 2>/dev/null)
             SERIAL_NUM=$(echo "$rec_data" | grep 'SRNM:' | awk '{print $2}')
             local prod_id=$(echo "$rec_data" | grep 'PRODUCT:' | awk '{print $2}')
@@ -189,19 +183,15 @@ scan_for_ipad() {
                 *) echo "Error: Detected unsupported hardware ($prod_id)."; exit 1 ;;
             esac
 
-            # Log Chip Architecture
             case "$cpid_id" in
-                "0x8003"|"0x8000") echo "Chipset: A9 detected." ;;
-                "0x8001")          echo "Chipset: A9X (iPad Pro) detected." ;;
-                "0x8010"|"0x8011") echo "Chipset: A10/A10X detected." ;;
+                "0x8003"|"0x8000"|"0x8001") IS_A9_CHIP=true ;;
             esac
             break
 
         else
             echo "Checking for iPad in Normal (Springboard) Mode..."
-            idevicepair pair >/dev/null 2>&1
+            pair_ipad
             
-            # Efficiently grab specific keys using -k
             SERIAL_NUM=$(ideviceinfo -k SerialNumber 2>/dev/null)
             local model_type=$(ideviceinfo -k ProductType 2>/dev/null)
             local hw_plat=$(ideviceinfo -k HardwarePlatform 2>/dev/null)
@@ -217,18 +207,12 @@ scan_for_ipad() {
                     *) echo "Unsupported iPad model: $model_type"; exit 1 ;;
                 esac
                 
-                # Verify chipset architecture
                 [[ "$hw_plat" == *"s8000"* || "$hw_plat" == *"s8003"* || "$hw_plat" == *"s8001"* ]] && IS_A9_CHIP=true
                 break
             fi
         fi
         sleep 2
     done
-
-    # Final logic for A9 flag
-    if [[ "$IPAD_MODEL" == *"iPad_5th_Gen"* || "$IPAD_MODEL" == *"iPad_Pro_9.7"* || "$IPAD_MODEL" == *"iPad_Pro_12.9_1st_Gen"* ]]; then
-        IS_A9_CHIP=true
-    fi
 
     echo "------------------------------------------------"
     echo " Target: $IPAD_MODEL"
@@ -237,75 +221,60 @@ scan_for_ipad() {
     echo "------------------------------------------------"
 }
 
-# Prevents the iPad from auto-booting into iOS after a failed exploit
-restrict_auto_boot() {
-    echo "Configuring environment variables to prevent auto-boot..."
-    irecovery -c "setenv auto-boot false"
-    irecovery -c "saveenv"
-}
-enforce_recovery() {
-    irecovery -c "setenv auto-boot false"
-    irecovery -c "saveenv"
-}
+evaluate_prerequisite_restore() {
+    parse_firmware_details "$1"
 
-check_if_additional_restore_is_needed "$1"
-# Enable all steps for final restore.
+    case "$FIRMWARE_VER" in
+        "10.0.1_14A403" | "10.0.2_14A456" | "10.0.3_14A551" | \
+        "10.1_14B72c"   | "10.1.1_14B100" | "10.1.1_14B150" | \
+        "10.2_14C92"    | "10.2.1_14D27"  | "10.3_14E277"   | \
+        "10.3.1_14E304" | "10.3.2_14F89")
+            echo "Notice: Early iOS 10 detected. A bridge restore to 10.3.3 is required."
+            ;;
+        *)
+            return
+            ;;
+    esac
 
-not_final_restore=true
+    local bridge_url=""
+    case "$IPAD_MODEL" in
+        "iPad_5th_Gen")          bridge_url="http://appldnld.apple.com/ios10.3.3/091-23331-20170719-CA996666-6977-11E7-81A4-399100BA0AE3/iPad_6,11_iPad_6,12_10.3.3_14G60_Restore.ipsw" ;;
+        "iPad_Pro_12.9_1st_Gen") bridge_url="http://appldnld.apple.com/ios10.3.3/091-23269-20170719-CA961588-6977-11E7-9128-309100BA0AE3/iPadPro_12.9_10.3.3_14G60_Restore.ipsw" ;;
+        "iPad_Pro_9.7")          bridge_url="http://appldnld.apple.com/ios10.3.3/091-23144-20170719-CA94A540-6977-11E7-85B4-2D9100BA0AE3/iPadPro_9.7_10.3.3_14G60_Restore.ipsw" ;;
+        "iPad_Pro_10.5")         bridge_url="http://appldnld.apple.com/ios10.3.3/091-23306-20170719-CA9ADE92-6977-11E7-9D4A-379100BA0AE3/iPad_7,3_iPad_7,4_10.3.3_14G60_Restore.ipsw" ;;
+        "iPad_Pro_12.9_2nd_Gen") bridge_url="http://appldnld.apple.com/ios10.3.3/091-23342-20170719-CA9AC9E8-6977-11E7-9507-3C9100BA0AE3/iPad_7,1_iPad_7,2_10.3.3_14G60_Restore.ipsw" ;;
+        *) echo "No bridge URL available for $IPAD_MODEL. Attempting direct restore." ; return ;;
+    esac
 
-usbmuxd_restart() {
-    # Restart in normal non-pulling mode daemonized.
-    killall usbmuxd > /dev/null 2>&1
-    usbmuxd > /dev/null 2>&1
-}
-
-update_existing_data() {
-    if [ -d "$1"/data ]; then
-        echo "Found existing data folder!"
-        cp -rv "$1"/data .
-        echo "Copied existing data folder!"
-    else
-        echo "Error: Could not find the data folder in $1!"
-        exit 1
-    fi
-
-    # Don't print error messages if no boot-* files exist.
-    cp -rv "$2"/boot-* . 2>/dev/null 
+    # Recursively run the restore for the bridge firmware
+    initiate_firmware_restore "$bridge_url"
 }
 
 initiate_firmware_restore() {
     local ipsw_path="$1"
     
-    # Prepare the environment
     await_recovery_mode
     restrict_auto_boot
     parse_firmware_details "$ipsw_path"
 
     echo "Status: Preparing to install iOS $FIRMWARE_VER..."
 
-    # Define the workspace for this specific device/firmware combo
     local session_dir="data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}"
     mkdir -p "$session_dir/block"
 
     if [[ "$IS_A9_CHIP" == "true" ]]; then
-        # --- A9/A9X Logic (iPad 5, Pro 9.7, Pro 12.9 Gen 1) ---
-
-        # 1. Acquire Restore SHCBlock
-        # We check for the specific bin file needed to authorize the restore
         while ! ls "$session_dir"/block/*-restore-shcblock2.bin >/dev/null 2>&1; do
             echo "Step 1: Fetching Restore SHCBlock..."
-            run_exploit_sequence # formerly turdursra1n_pwn
+            run_exploit_sequence
 
             if ! echo 1 | turdus_merula -C "$session_dir" --get-shcblock "$ipsw_path"; then
                 echo "Warning: Block acquisition failed. Retrying exploit..."
                 continue
             fi
-
             await_recovery_mode
             restrict_auto_boot
         done
 
-        # 2. Execute the Restore
         echo "Step 2: Installing firmware to iPad..."
         run_exploit_sequence
 
@@ -314,47 +283,25 @@ initiate_firmware_restore() {
             run_exploit_sequence
         done
 
-        # If this is just a bridge restore (e.g., 10.3.3), we stop here.
         if [[ "$IS_PRELIMINARY_RESTORE" == "true" ]]; then
-            echo "Bridge restore complete."
             return
         fi
 
-        # 3. Acquire Post-Restore (Current) SHCBlock
-        # Required for final tethered boot generation
         while ! ls "$session_dir"/block/*-current-shcblock2.bin >/dev/null 2>&1; do
             echo "Step 3: Fetching post-install SHCBlock..."
-            
-            # Use subshell to handle directory jumping safely
-            (
-                cd "$session_dir" || exit
-                until turdusra1n -g "$ipsw_path"; do
-                    echo "Retrying block dump..."
-                done
-            )
-
+            ( cd "$session_dir" || exit; until turdusra1n -g "$ipsw_path"; do echo "Retrying block dump..."; done )
             await_recovery_mode
             restrict_auto_boot
         done
 
-        # 4. Generate PTEBlock (The Tethered Boot Key)
         while ! ls "$session_dir"/block/*-pteblock2.bin >/dev/null 2>&1; do
             echo "Step 4: Generating PTEBlock for tethered booting..."
-            
-            (
-                cd "$session_dir" || exit
-                # Attempt to generate PTEBlock using the signed SEP and current SHC
-                until turdusra1n -g -i image4/*signed-SEP.img4 -C block/*-current-shcblock2.bin "$ipsw_path"; do
-                    echo "PTE Generation failed. Retrying..."
-                done
-            )
-
+            ( cd "$session_dir" || exit; until turdusra1n -g -i image4/*signed-SEP.img4 -C block/*-current-shcblock2.bin "$ipsw_path"; do echo "PTE Generation failed. Retrying..."; done )
             await_recovery_mode
             restrict_auto_boot
         done
 
     else
-        # --- A10/A10X Logic (iPad 6, Pro 10.5, Pro 12.9 Gen 2) ---
         echo "Step 1: Commencing A10/A10X Restore Sequence..."
         run_exploit_sequence
 
@@ -363,42 +310,27 @@ initiate_firmware_restore() {
             run_exploit_sequence
         done
     fi
-
-    echo "Firmware installation sequence finished."
 }
 
-boot_turdusra1n() {
-    # Ensure the device is reachable in recovery before starting
+startup_ipad_system() {
     await_recovery_mode
 
-    # We stay in this loop as long as the iPad is detected in Recovery Mode.
-    # Logic: turdusra1n sometimes returns a '0' exit code (success) even if 
-    # the boot fails to reach the kernel. Monitoring the recovery state 
-    # is the only reliable way to confirm the iPad has actually started iOS.
     while irecovery -m 2>/dev/null | grep -q "Recovery Mode"; do
-        echo "Guidance: If a 'failed to open handle' error appears after Checkmate, try unplugging and re-plugging the USB cable."
-
+        echo "Guidance: If a 'failed to open handle' error appears, unplug and re-plug the USB cable."
         local base_path="data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}"
 
         if [[ "$IS_A9_CHIP" == "true" ]]; then
-            # Boot Sequence for A9/A9X (iPad 5, iPad Pro 9.7, iPad Pro 12.9 Gen 1)
             until turdusra1n -TP "$base_path"/block/*-pteblock2.bin; do
                 echo "System failed to boot. Re-trying exploit..."
                 sleep 1
             done
         else
-            # Boot Sequence for A10/A10X (iPad 6, iPad Pro 10.5, iPad Pro 12.9 Gen 2)
-            # Requires the iBoot image and both signed and unsigned SEP components
-            until turdusra1n -t "$base_path"/image4/*iBoot.img4 \
-                             -i "$base_path"/image4/*signed-SEP.img4 \
-                             -p "$base_path"/image4/*-SEP.im4p; do
+            until turdusra1n -t "$base_path"/image4/*iBoot.img4 -i "$base_path"/image4/*signed-SEP.img4 -p "$base_path"/image4/*-SEP.im4p; do
                 echo "System failed to boot. Re-trying exploit..."
                 sleep 1
             done
         fi
 
-        # Allow sufficient time for the iPad to initialize the kernel and 
-        # disconnect from the recovery stack.
         echo "Exploit payload sent. Waiting 20 seconds to verify system handoff..."
         sleep 20
     done
@@ -406,146 +338,87 @@ boot_turdusra1n() {
     echo "Status: iPad has successfully exited Recovery Mode."
 }
 
-generate_boot_script(){
-    boot_script=boot_"$device"_"$ver"_"$serial"
+write_tether_boot_script(){
+    local script_name="boot_${IPAD_MODEL}_${FIRMWARE_VER}_${SERIAL_NUM}"
+    rm -f *-"$SERIAL_NUM"
 
-    # Delete any existing boot* scripts for this serial number.
-    rm -f *-$serial
-    
-    if [ "$a9" = "true" ]; then
-        echo -e '#!/bin/bash
-
-real_portable_folder="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$real_portable_folder"
-os="$(uname)"
-arch="$(uname -m)"
-
-# OS/arch detection.
-# Add all the self-contained binaries we need to the $PATH used within this script.
-if [ "$os" = "Linux" ]; then
-
-    if [ "$arch" = "x86_64" ]; then
-        PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/linux/x86_64:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin"
-    elif [ "$arch" = "arm64" ]; then
-        PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/linux/arm64:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin"
+    # Define the payload conditionally based on the chip
+    local exploit_cmd=""
+    if [[ "$IS_A9_CHIP" == "true" ]]; then
+        exploit_cmd="until turdusra1n -TP data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}/block/*-pteblock2.bin; do echo 'Retrying exploit...'; done"
     else
-        echo "Error: Linux on $arch is not supported."
-        exit 1
+        exploit_cmd="until turdusra1n -t data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}/image4/*${BOOT_VER}-iBoot.img4 -i data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}/image4/*signed-SEP.img4 -p data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}/image4/*${BOOT_VER}-SEP.im4p; do echo 'Retrying exploit...'; done"
     fi
 
-    echo "Detected Linux on $arch."
+    # Write the script
+    cat <<EOF > "$script_name"
+#!/bin/bash
+BASE_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+cd "\$BASE_DIR"
 
-elif [ "$os" == "Darwin" ]; then
-    PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/macos:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_macos/bin"
-    echo "Detected Mac OS on $arch."
+# Import Paths
+if [[ "\$(uname)" == "Linux" ]]; then
+    if [[ "\$(uname -m)" == "x86_64" ]]; then
+        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/x86_64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin"
+    else
+        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/arm64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin"
+    fi
+    [[ "\$EUID" -ne 0 ]] && echo "Run with sudo!" && exit 1
+    killall usbmuxd >/dev/null 2>&1
+    usbmuxd -p >/dev/null 2>&1
 else
-    echo "Error: $os is not supported."
-    exit 1
+    PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/macos:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_macos/bin"
 fi
 
-echo "PATH: $PATH"   
-
-if [ "$os" = "Linux" ]; then
-
-    if [ "$EUID" -ne 0 ]; then
-        echo "Error: root privileges are required to boot your iPhone. Please execute $0 with sudo or as root to continue." >&2
-        exit 1
-    fi
-
-    usbmuxd_restart_polling > /dev/null 2>&1
-fi
-
-# Can not trust return values of turdusra1n because at least my 128GB TSMC 6S Plus reboots to recovery very occasionally. This has never happened on my 32GB TSMC 6S Plus.
 while irecovery -m 2>/dev/null | grep -q "Recovery Mode"; do
-    echo "If you get an error about failed to open handle (no device) after Checkmate?, disconnect then reconnect your iPhone."
-
-    while ! turdusra1n -TP data/'$device'_'$serial'/'$ver'/block/*-pteblock2.bin; do 
-        echo "Something went wrong, lets try that again..."
-    done
-
-    echo "Please wait, checking for proper booting in 20 seconds"
+    $exploit_cmd
+    echo "Checking boot status in 20s..."
     sleep 20
 done
 
-# Restart in normal non-pulling mode daemonized.
 killall usbmuxd > /dev/null 2>&1
 usbmuxd
-echo "Done!"
+echo "Boot completed!"
+EOF
 
-' > $boot_script
+    chmod 755 "$script_name"
+    echo "Notice: If your iPad dies or restarts, run './$script_name' while connected to a PC to boot it."
+}
 
-    #A10.
-    else
-        echo -e '#!/bin/bash
+# ============================================================
+# 4. MAIN EXECUTION SEQUENCE
+# ============================================================
 
-real_portable_folder="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$real_portable_folder"
-os="$(uname)"
-arch="$(uname -m)"
-
-# OS/arch detection.
-# Add all the self-contained binaries we need to the $PATH used within this script.
-if [ "$os" = "Linux" ]; then
-
-    if [ "$arch" = "x86_64" ]; then
-        PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/linux/x86_64:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin"
-    elif [ "$arch" = "arm64" ]; then
-        PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/linux/arm64:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin"
-    else
-        echo "Error: Linux on $arch is not supported."
+# Command line parsing
+if [[ "$1" == "-u" ]]; then
+    if [[ "$#" -ne 2 ]]; then
+        echo "Error: The -u argument requires the path to your old Samuel's downgrade folder."
         exit 1
     fi
+    update_existing_data "$2"
+    exit 0
+fi
 
-    echo "Detected Linux on $arch."
-
-elif [ "$os" == "Darwin" ]; then
-    PATH="${PATH:+$PATH:}$real_portable_folder/bin:$real_portable_folder/bin/Legacy-iOS-Kit/bin/macos:$real_portable_folder/bin/turdus_m3rula_1.1_b0ea3ee7_macos/bin"
-    echo "Detected Mac OS on $arch."
-else
-    echo "Error: $os is not supported."
+if [[ ! -f "$1" ]]; then
+    echo -e "Error: Valid IPSW file required.\nUsage: ./samueldowngrade <path_to_ipsw>"
     exit 1
 fi
 
-echo "PATH: $PATH"   
+# Execute workflow
+set_path
+startup
+scan_for_ipad
 
-if [ "$os" = "Linux" ]; then
+# Check for intermediate restore
+evaluate_prerequisite_restore "$1"
 
-    if [ "$EUID" -ne 0 ]; then
-        echo "Error: root privileges are required to boot your iPhone. Please execute $0 with sudo or as root to continue." >&2
-        exit 1
-    fi
+# Prepare for final restore
+IS_PRELIMINARY_RESTORE=false
+initiate_firmware_restore "$1"
 
-    usbmuxd_restart_polling > /dev/null 2>&1
-fi
+# Boot and finalize
+startup_ipad_system
+write_tether_boot_script
+refresh_usbmux
 
-# Can not trust return values of turdusra1n because at least my 128GB TSMC 6S Plus reboots to recovery very occasionally. This has never happened on my 32GB TSMC 6S Plus.
-while irecovery -m 2>/dev/null | grep -q "Recovery Mode"; do
-
-    while ! turdusra1n -t data/'$device'_'$serial'/'$ver'/image4/*'$boot_script_ver'-iBoot.img4 -i data/'$device'_'$serial'/'$ver'/image4/*signed-SEP.img4 -p data/'$device'_'$serial'/'$ver'/image4/*'$boot_script_ver'-SEP.im4p; do
-        echo "Something went wrong, lets try that again..."
-    done
-
-    echo "Please wait, checking for proper booting in 20 seconds"
-    sleep 20
-done
-
-# Restart in normal non-pulling mode daemonized.
-killall usbmuxd > /dev/null 2>&1
-usbmuxd
-echo "Done!"
-
-' > $boot_script
-
-    fi
-
-    chmod 755 $boot_script
-    # Clips the last character otherwise in the echo below.
-    boot_script=$(echo "$boot_script" | tr -d '\r')
-    echo "If your phone is powered off or rebooted, it will first boot to Recovery Mode. You'll need to run the new $boot_script command to boot it into normal mode."
-}
-
-pair_iphone(){
-    idevicepair pair >/dev/null 2>&1
-}
-
-echo -e "\nDONE!\n"
+echo -e "\nSUCCESS! The downgrade process is complete.\n"
