@@ -3,10 +3,10 @@
 # ============================================================
 # Samuel's iPad Downgrade
 # Targeted for A9/A10 iPads (including iPad Pro)
-# Version: 2.0.4
+# Version: 1.0
 # ============================================================
 
-IPAD_VER="2.0.4"
+IPAD_VER="1.0"
 TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TOOL_DIR"
 
