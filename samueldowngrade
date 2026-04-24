@@ -2,7 +2,7 @@ version=1.0.0
 real_portable_folder="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$real_portable_folder"
 # Log file.
-exec > >(tee log.txt) 2>&1
+exec > (tee log.txt) 2>&1
 # Load common functions.
 source bin/idevice-tool-kit/idevice-tool-kit
 
