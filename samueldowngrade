@@ -1,111 +1,72 @@
-#!/bin/bash
+version=2.0.4
+real_portable_folder="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$real_portable_folder"
+# Log file.
+exec > >(tee log.txt) 2>&1
+# Load common functions.
+source bin/idevice-tool-kit/idevice-tool-kit
 
-# ============================================================
-# Samuel's iPad Downgrade
-# Targeted for A9/A10 iPads (including iPad Pro)
-# Version: 1.0
-# ============================================================
+check_if_additional_restore_is_needed() {
 
-IPAD_VER="1.0"
-TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$TOOL_DIR"
+    get_ver "$1"
 
-# Logging setup: everything is recorded in samuel_ipad_log.txt
-exec > >(tee samuel_ipad_log.txt) 2>&1
+    if [ "$ver" = "10.0.1_14A403" ] || \
+    [ "$ver" = "10.0.2_14A456" ] || \
+    [ "$ver" = "10.0.3_14A551" ] || \
+    [ "$ver" = "10.1_14B72c" ] || \
+    [ "$ver" = "10.1.1_14B100" ] || \
+    [ "$ver" = "10.1.1_14B150" ] || \
+    [ "$ver" = "10.2_14C92" ] || \
+    [ "$ver" = "10.2.1_14D27" ] || \
+    [ "$ver" = "10.3_14E277" ] || \
+    [ "$ver" = "10.3.1_14E304" ] || \
+    [ "$ver" = "10.3.2_14F89" ]; then
+        echo "Info: need to restore iOS 10.3.3 first."
+    else
+        return
+    fi
 
-# Source the required toolkit
-if [ -f bin/idevice-tool-kit/idevice-tool-kit ]; then
-    source bin/idevice-tool-kit/idevice-tool-kit
-else
-    echo "Error: Device toolkit not found. Please check your 'bin' folder."
-    exit 1
-fi
-
-# Logic to handle intermediate restores for early iOS 10 versions
-handle_ipad_bridge_restore() {
-    local target_ipsw="$1"
-    get_ver "$target_ipsw"
-
-    # Identify if the target firmware is an early iOS 10 build
-    case "$ver" in
-        "10.0.1_14A403" | "10.0.2_14A456" | "10.0.3_14A551" | \
-        "10.1_14B72c"   | "10.1.1_14B100" | "10.1.1_14B150" | \
-        "10.2_14C92"    | "10.2.1_14D27"  | "10.3_14E277"   | \
-        "10.3.1_14E304" | "10.3.2_14F89")
-            echo "Notice: Early iOS 10 detected. Bridging via iOS 10.3.3 is required."
-            ;;
-        *)
-            return
-            ;;
-    esac
-
-    # Mapping iPad models to their respective 10.3.3 Bridge IPSWs
-    local bridge_url=""
-    case "$device" in
-        "ipad_5") # A9
-            bridge_url="http://appldnld.apple.com/ios10.3.3/091-23363-20170719-CA90E924-6977-11E7-9106-2C9100BA0AE3/iPad_6,11_6,12_10.3.3_14G60_Restore.ipsw"
-            ;;
-        "ipad_pro_129_1") # A9X
-            bridge_url="http://appldnld.apple.com/ios10.3.3/091-23351-20170719-CA90F248-6977-11E7-B670-2D9100BA0AE3/iPad_6,7_6,8_10.3.3_14G60_Restore.ipsw"
-            ;;
-        "ipad_pro_97") # A9X
-            bridge_url="http://appldnld.apple.com/ios10.3.3/091-23348-20170719-CA920E30-6977-11E7-809C-2E9100BA0AE3/iPad_6,3_6,4_10.3.3_14G60_Restore.ipsw"
-            ;;
-        "ipad_6" | "ipad_pro_105" | "ipad_pro_129_2")
-            # Note: A10/A10X iPads usually require less bridging for 10.3.x, 
-            # but if needed, they utilize the same sequence logic.
-            echo "Checking A10/A10X bridge requirements..."
-            ;;
-        *)
-            echo "Warning: Device $device may not require a bridge restore or is not in the bridge database."
-            return
-            ;;
-    esac
-
-    if [[ -n "$bridge_url" ]]; then
-        restore_ipsw "$bridge_url"
+    # Needed for iOS 10.0.1-iOS 10.3.2
+    if [ $device == "iPad_5th_gen" ]; then
+        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23331-20170719-CA996666-6977-11E7-81A4-399100BA0AE3/iPad_6,11_iPad_6,12_10.3.3_14G60_Restore.ipsw
+    elif [ $device == "iPad_Pro_12.9" ]; then
+        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23269-20170719-CA961588-6977-11E7-9128-309100BA0AE3/iPadPro_12.9_10.3.3_14G60_Restore.ipsw
+    elif [ $device == "iPad_Pro_9.7" ]; then
+        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23144-20170719-CA94A540-6977-11E7-85B4-2D9100BA0AE3/iPadPro_9.7_10.3.3_14G60_Restore.ipsw
+    elif [ $device == "iPad_Pro_10.5" ]; then
+        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23306-20170719-CA9ADE92-6977-11E7-9D4A-379100BA0AE3/iPad_7,3_iPad_7,4_10.3.3_14G60_Restore.ipsw
+    elif [ $device == "iPad_Pro_12.9" ]; then
+        restore_ipsw http://appldnld.apple.com/ios10.3.3/091-23342-20170719-CA9AC9E8-6977-11E7-9507-3C9100BA0AE3/iPad_7,1_iPad_7,2_10.3.3_14G60_Restore.ipsw
     fi
 }
 
-# Terminal Header
-echo "================================================"
-echo "      Samuel's iPad Downgrade v$IPAD_VER"
-echo "      Supporting A9, A9X, A10, & A10X iPads"
-echo "================================================"
+echo -e "Samuel's-iPadDowngrade"
 
-# Handle data migration from older versions
-if [[ "$1" == "-u" ]]; then
-    if [[ -z "$2" ]]; then
-        echo "Error: Specify the path to the old directory. Example: -u ./old-folder"
+# Update functionality. We need to get 2 things: the data folder and any boot* scripts.
+if [ "$1" == "-u" ]; then
+
+    if [ "$#" -ne 2 ]; then
+        echo "You gave the -u argument, which expects an existing Samuel's iPad downgrade release directory as the following argument."
         exit 1
     fi
+
     update_existing_data "$2"
     exit 0
 fi
 
-# IPSW Input Validation
-if [[ ! -f "$1" ]]; then
-    echo "Error: You must provide a path to an iPad IPSW file."
-    echo "Usage: ./samueldowngrade [path_to_ipsw]"
+if [ ! -f "$1" ]; then
+    echo -e "Error: you must provide an ipsw to Samuel's iPad downgrade.\nUsage:\n\samueldowngrade <ipsw file>"
     exit 1
 fi
 
-# Core Execution Sequence
 set_path
 startup
-detect_iphone # This function from the toolkit works for iPads as well
-
-# Execute the bridge if necessary
-handle_ipad_bridge_restore "$1"
-
-# Perform final downgrade
-echo "Status: Starting the final restore for your iPad..."
+detect_ipad
+check_if_additional_restore_is_needed "$1"
+# Enable all steps for final restore.
 not_final_restore=false
 restore_ipsw "$1"
-
-# Post-restore boot and stabilization
 boot_turdusra1n
 generate_boot_script
 usbmuxd_restart
-
-echo -e "\nSUCCESS: Your iPad downgrade is complete!\n"
+echo -e "\nDONE!\n"
