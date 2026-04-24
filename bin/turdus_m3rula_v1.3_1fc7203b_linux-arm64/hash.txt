@@ -1,0 +1,6 @@
+MD5(bin/turdusra1n)= 5a1132e062fa477e0fd9874e2d14a4fd
+MD5(bin/turdus_merula)= a6da0a4c46fff55feccce4aae5bf10c5
+SHA1(bin/turdusra1n)= cde608f0dc950767b4b6f307d943e40700c9c68f
+SHA1(bin/turdus_merula)= 8035c6d978edad364d14d1569e80bd38430cd4a9
+SHA2-384(bin/turdusra1n)= 29bd4d8a5565e59410b2737ecd75a80c07f2fda986759611893fcbc7da3ab394f872b23a25a2a0d87f0c759cf719ef20
+SHA2-384(bin/turdus_merula)= 79bd2ecf5864d446e7fe59d602a5951f970df2fd1c674cb84fe16100882f300bf2c6f9d5448515054b76dba18adcff0d
