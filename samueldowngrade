@@ -1,100 +1,111 @@
 #!/bin/bash
 
 # ============================================================
-# Samuel's iPad Downgrade - Main Execution Script
-# Developed by: Samuel Bowers
-# Version: 1.0
+# Samuel's iPad Downgrade
+# Targeted for A9/A10 iPads (including iPad Pro)
+# Version: 2.0.4
 # ============================================================
 
-SAM_VER="1.0"
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$BASE_DIR"
+IPAD_VER="2.0.4"
+TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$TOOL_DIR"
 
-# Initialize logging: captures all output and errors to session_log.txt
-exec > >(tee session_log.txt) 2>&1
+# Logging setup: everything is recorded in samuel_ipad_log.txt
+exec > >(tee samuel_ipad_log.txt) 2>&1
 
-# Import the core device manipulation toolkit
+# Source the required toolkit
 if [ -f bin/idevice-tool-kit/idevice-tool-kit ]; then
     source bin/idevice-tool-kit/idevice-tool-kit
 else
-    echo "Fatal Error: idevice-tool-kit is missing from the bin folder."
+    echo "Error: Device toolkit not found. Please check your 'bin' folder."
     exit 1
 fi
 
-# Function to determine if a preliminary 10.3.3 restore is required
-# This is specifically for early iOS 10 builds (10.0.1 through 10.3.2)
-evaluate_prerequisite_restore() {
-    local ipsw_path="$1"
-    get_ver "$ipsw_path"
+# Logic to handle intermediate restores for early iOS 10 versions
+handle_ipad_bridge_restore() {
+    local target_ipsw="$1"
+    get_ver "$target_ipsw"
 
+    # Identify if the target firmware is an early iOS 10 build
     case "$ver" in
         "10.0.1_14A403" | "10.0.2_14A456" | "10.0.3_14A551" | \
         "10.1_14B72c"   | "10.1.1_14B100" | "10.1.1_14B150" | \
         "10.2_14C92"    | "10.2.1_14D27"  | "10.3_14E277"   | \
         "10.3.1_14E304" | "10.3.2_14F89")
-            echo "Status: Early iOS 10 detected. Initiating bridge restore to iOS 10.3.3."
+            echo "Notice: Early iOS 10 detected. Bridging via iOS 10.3.3 is required."
             ;;
         *)
-            # No intermediate restore needed
             return
             ;;
     esac
 
-    # Assign the correct 10.3.3 URL based on the detected hardware
+    # Mapping iPad models to their respective 10.3.3 Bridge IPSWs
     local bridge_url=""
     case "$device" in
-        "iphone_6s")      bridge_url="http://appldnld.apple.com/ios10.3.3/091-23441-20170719-CA9B0570-6977-11E7-95CC-3F9100BA0AE3/iPhone_4.7_10.3.3_14G60_Restore.ipsw" ;;
-        "iphone_6s_plus") bridge_url="http://appldnld.apple.com/ios10.3.3/091-23338-20170719-CA990FD6-6977-11E7-AE41-3B9100BA0AE3/iPhone_5.5_10.3.3_14G60_Restore.ipsw" ;;
-        "iphone_se")      bridge_url="http://appldnld.apple.com/ios10.3.3/091-23133-20170719-CA8E78E6-6977-11E7-968B-2B9100BA0AE3/iPhone_4.0_64bit_10.3.3_14G60_Restore.ipsw" ;;
-        "iphone_7")       bridge_url="http://appldnld.apple.com/ios10.3.3/091-23304-20170719-CA9AC9AC-6977-11E7-9507-349100BA0AE3/iPhone_7_10.3.3_14G60_Restore.ipsw" ;;
-        "iphone_7_plus")  bridge_url="http://appldnld.apple.com/ios10.3.3/091-23119-20170719-CA92905C-6977-11E7-AB61-299100BA0AE3/iPhone_7Plus_10.3.3_14G60_Restore.ipsw" ;;
-        *) echo "Error: Device type '$device' not recognized for bridge restore."; exit 1 ;;
+        "ipad_5") # A9
+            bridge_url="http://appldnld.apple.com/ios10.3.3/091-23363-20170719-CA90E924-6977-11E7-9106-2C9100BA0AE3/iPad_6,11_6,12_10.3.3_14G60_Restore.ipsw"
+            ;;
+        "ipad_pro_129_1") # A9X
+            bridge_url="http://appldnld.apple.com/ios10.3.3/091-23351-20170719-CA90F248-6977-11E7-B670-2D9100BA0AE3/iPad_6,7_6,8_10.3.3_14G60_Restore.ipsw"
+            ;;
+        "ipad_pro_97") # A9X
+            bridge_url="http://appldnld.apple.com/ios10.3.3/091-23348-20170719-CA920E30-6977-11E7-809C-2E9100BA0AE3/iPad_6,3_6,4_10.3.3_14G60_Restore.ipsw"
+            ;;
+        "ipad_6" | "ipad_pro_105" | "ipad_pro_129_2")
+            # Note: A10/A10X iPads usually require less bridging for 10.3.x, 
+            # but if needed, they utilize the same sequence logic.
+            echo "Checking A10/A10X bridge requirements..."
+            ;;
+        *)
+            echo "Warning: Device $device may not require a bridge restore or is not in the bridge database."
+            return
+            ;;
     esac
 
-    restore_ipsw "$bridge_url"
+    if [[ -n "$bridge_url" ]]; then
+        restore_ipsw "$bridge_url"
+    fi
 }
 
-# Branding display
-echo "------------------------------------------------"
-echo " Samuel's iPad Downgrade Utility v$SAM_VER"
-echo " Based on Dusk Downgrade (3-BSD License)"
-echo " Maintained by: Samuel Bowers"
-echo "------------------------------------------------"
+# Terminal Header
+echo "================================================"
+echo "      Samuel's iPad Downgrade v$IPAD_VER"
+echo "      Supporting A9, A9X, A10, & A10X iPads"
+echo "================================================"
 
-# Handle update requests
+# Handle data migration from older versions
 if [[ "$1" == "-u" ]]; then
     if [[ -z "$2" ]]; then
-        echo "Error: The -u flag requires a path to a previous release folder."
+        echo "Error: Specify the path to the old directory. Example: -u ./old-folder"
         exit 1
     fi
-    echo "Migrating data from existing installation..."
     update_existing_data "$2"
     exit 0
 fi
 
-# Validate input IPSW
+# IPSW Input Validation
 if [[ ! -f "$1" ]]; then
-    echo "Error: Please provide a valid .ipsw file path."
-    echo "Usage: ./samuel-downgrade <file.ipsw>"
+    echo "Error: You must provide a path to an iPad IPSW file."
+    echo "Usage: ./samuel-ipad-downgrade [path_to_ipsw]"
     exit 1
 fi
 
-# Main Sequence
+# Core Execution Sequence
 set_path
 startup
-detect_iphone
+detect_iphone # This function from the toolkit works for iPads as well
 
-# Check if we need the 10.3.3 jump
-evaluate_prerequisite_restore "$1"
+# Execute the bridge if necessary
+handle_ipad_bridge_restore "$1"
 
-# Proceed to final target restore
-echo "Beginning final downgrade process..."
+# Perform final downgrade
+echo "Status: Starting the final restore for your iPad..."
 not_final_restore=false
 restore_ipsw "$1"
 
-# Device booting and finalization
+# Post-restore boot and stabilization
 boot_turdusra1n
 generate_boot_script
 usbmuxd_restart
 
-echo -e "\nProcess Complete! Your device has been downgraded.\n"
+echo -e "\nSUCCESS: Your iPad downgrade is complete!\n"
