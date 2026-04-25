@@ -3,10 +3,10 @@
 # ============================================================
 # Samuel's iPad Downgrade
 # Targeted for A9/A10/A10X iPads (iPad 5, 6, Pro Series)
-# Version: 1.0.1
+# Version: 1.0.0
 # ============================================================
 
-SAM_VER="1.0.1"
+SAM_VER="1.0.0"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
