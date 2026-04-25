@@ -64,7 +64,7 @@ run_exploit_sequence() {
     echo " The exploit tool will now run. Please follow the"
     echo " on-screen instructions to enter DFU mode."
     echo "------------------------------------------------"
-    until turdusra1n -D; do
+    until ./turdusra1n -D; do
         echo "Exploit failed or device missed DFU. Re-attempting..."
         sleep 1
     done
@@ -267,11 +267,11 @@ initiate_firmware_restore() {
         while ! ls "$session_dir"/block/*-restore-shcblock2.bin >/dev/null 2>&1; do
             echo "A9 Step 1: Getting pre-restore SHCBlock..."
             run_exploit_sequence
-            turdus_merula -C "$session_dir" --get-shcblock "$ipsw_path"
+            ./turdus_merula -C "$session_dir" --get-shcblock "$ipsw_path"
             await_recovery_mode
         done
 
-        until echo 1 | turdus_merula -C "$session_dir" -o --load-shcblock "$session_dir"/block/*-restore-shcblock2.bin "$ipsw_path"; do
+        until echo 1 | ./turdus_merula -C "$session_dir" -o --load-shcblock "$session_dir"/block/*-restore-shcblock2.bin "$ipsw_path"; do
             echo "A9 Step 2: Restoring device..."
             run_exploit_sequence
         done
@@ -282,13 +282,13 @@ initiate_firmware_restore() {
 
         while ! ls "$session_dir"/block/*-current-shcblock2.bin >/dev/null 2>&1; do
             echo "A9 Step 3: Getting post-restore SHCBlock..."
-            ( cd "$session_dir" || exit; turdusra1n -g )
+            ( cd "$session_dir" || exit; ./turdusra1n -g )
             await_recovery_mode
         done
 
         while ! ls "$session_dir"/block/*-pteblock2.bin >/dev/null 2>&1; do
             echo "A9 Step 4: Generating PTEBlock..."
-            ( cd "$session_dir" || exit; turdusra1n -g -i image4/*signed-SEP.img4 -C block/*-current-shcblock2.bin )
+            ( cd "$session_dir" || exit; ./turdusra1n -g -i image4/*signed-SEP.img4 -C block/*-current-shcblock2.bin )
             await_recovery_mode
         done
 
@@ -299,7 +299,7 @@ initiate_firmware_restore() {
         echo "A10 Step 1: Restoring the device..."
         run_exploit_sequence
 
-        until echo 1 | turdus_merula -C "$session_dir" -o "$ipsw_path"; do
+        until echo 1 | ./turdus_merula -C "$session_dir" -o "$ipsw_path"; do
             echo "Error during A10 restore. Re-exploiting..."
             run_exploit_sequence
         done
@@ -314,9 +314,9 @@ startup_ipad_system() {
         echo "Initiating Boot Sequence..."
 
         if [[ "$IS_A9_CHIP" == "true" ]]; then
-            ( cd "$session_dir" || exit; turdusra1n -TP block/*-pteblock2.bin )
+            ( cd "$session_dir" || exit; ./turdusra1n -TP block/*-pteblock2.bin )
         else
-            ( cd "$session_dir" || exit; turdusra1n -t image4/*iBoot.img4 -i image4/*signed-SEP.img4 -p image4/*-SEP.im4p )
+            ( cd "$session_dir" || exit; ./turdusra1n -t image4/*iBoot.img4 -i image4/*signed-SEP.img4 -p image4/*-SEP.im4p )
         fi
 
         echo "Payload sent. Waiting 20 seconds to verify system handoff..."
@@ -332,9 +332,9 @@ write_tether_boot_script(){
 
     local exploit_cmd=""
     if [[ "$IS_A9_CHIP" == "true" ]]; then
-        exploit_cmd="( cd data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER} && turdusra1n -TP block/*-pteblock2.bin )"
+        exploit_cmd="( cd data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER} && ./turdusra1n -TP block/*-pteblock2.bin )"
     else
-        exploit_cmd="( cd data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER} && turdusra1n -t image4/*iBoot.img4 -i image4/*signed-SEP.img4 -p image4/*-SEP.im4p )"
+        exploit_cmd="( cd data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER} && ./turdusra1n -t image4/*iBoot.img4 -i image4/*signed-SEP.img4 -p image4/*-SEP.im4p )"
     fi
 
     cat <<EOF > "$script_name"
@@ -344,15 +344,15 @@ cd "\$BASE_DIR"
 
 if [[ "\$(uname)" == "Linux" ]]; then
     if [[ "\$(uname -m)" == "x86_64" ]]; then
-        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/x86_64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
+        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/x86_64:\$BASE_DIR/bin/turdus_m3rula_1.3_1fc7203b_linux-amd64/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
     else
-        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/arm64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
+        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/arm64:\$BASE_DIR/bin/turdus_m3rula_1.3_1fc7203b_linux-arm64/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
     fi
     [[ "\$EUID" -ne 0 ]] && echo "Run with sudo!" && exit 1
     killall usbmuxd >/dev/null 2>&1
     usbmuxd -p >/dev/null 2>&1
 else
-    PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/macos:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_macos/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
+    PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/macos:\$BASE_DIR/bin/turdus_m3rula_1.3_1fc7203b_macos/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
 fi
 
 while irecovery -m 2>/dev/null | grep -q "Recovery Mode"; do
