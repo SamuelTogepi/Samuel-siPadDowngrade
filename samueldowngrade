@@ -3,10 +3,10 @@
 # ============================================================
 # Samuel's iPad Downgrade
 # Targeted for A9/A10/A10X iPads (iPad 5, 6, Pro Series)
-# Version: 1.0.0
+# Version: 1.0.1
 # ============================================================
 
-SAM_VER="1.0.0"
+SAM_VER="1.0.1"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
@@ -84,17 +84,19 @@ set_path() {
     local bin_base="$BASE_DIR/bin"
     local legacy_base="$bin_base/Legacy-iOS-Kit/bin"
     
+    # We export the PATH so sub-processes (like bash scripts) can find the binaries.
+    # We also include a generic "turdus_m3rula" path just in case the folder was renamed.
     if [[ "$SYS_OS" == "Linux" ]]; then
         if [[ "$SYS_ARCH" == "x86_64" ]]; then
-            PATH="${PATH:+$PATH:}$bin_base:$legacy_base/linux/x86_64:$bin_base/turdus_m3rula_1.3_1fc7203b_linux-amd64/bin"
+            export PATH="$PATH:$bin_base:$legacy_base/linux/x86_64:$bin_base/turdus_m3rula_1.3_1fc7203b_linux-amd64/bin:$bin_base/turdus_m3rula/bin"
         elif [[ "$SYS_ARCH" == "arm64" ]]; then
-            PATH="${PATH:+$PATH:}$bin_base:$legacy_base/linux/arm64:$bin_base/turdus_m3rula_1.3_1fc7203b_linux-arm64/bin"
+            export PATH="$PATH:$bin_base:$legacy_base/linux/arm64:$bin_base/turdus_m3rula_1.3_1fc7203b_linux-arm64/bin:$bin_base/turdus_m3rula/bin"
         else
             echo "Error: Linux architecture $SYS_ARCH is not supported."
             exit 1
         fi
     elif [[ "$SYS_OS" == "Darwin" ]]; then
-        PATH="${PATH:+$PATH:}$bin_base:$legacy_base/macos:$bin_base/turdus_m3rula_1.3_1fc7203b_macos/bin"
+        export PATH="$PATH:$bin_base:$legacy_base/macos:$bin_base/turdus_m3rula_1.3_1fc7203b_macos/bin:$bin_base/turdus_m3rula/bin"
     else
         echo "Error: Operating system $SYS_OS is not supported."
         exit 1
@@ -105,32 +107,37 @@ startup() {
     [[ ! -d data ]] && mkdir data
     mkdir -p data/ipsw
 
-    if [[ "$SYS_OS" == "Linux" && "$EUID" -ne 0 ]]; then
-        echo "Error: Samuel's iPad Downgrade requires root privileges on Linux. Run with sudo."
-        exit 1
+    # --- FIX MACOS QUARANTINE AND PERMISSIONS BEFORE DOING ANYTHING ---
+    if [[ "$SYS_OS" == "Darwin" ]]; then
+        xattr -rc . 2>/dev/null
+        chmod -R +x "$BASE_DIR/bin" 2>/dev/null
+    elif [[ "$SYS_OS" == "Linux" ]]; then
+        if [[ "$EUID" -ne 0 ]]; then
+            echo "Error: Samuel's iPad Downgrade requires root privileges on Linux. Run with sudo."
+            exit 1
+        fi
+        chmod -R +x "$BASE_DIR/bin" 2>/dev/null
+        if command -v dnf >/dev/null; then
+            update-crypto-policies --set LEGACY > /dev/null 2>&1
+            setenforce 0 2>/dev/null
+        fi
     fi
 
+    # --- CHECK DEPENDENCIES ---
     if [[ ! -f "bin/Legacy-iOS-Kit/resources/firstrun" ]]; then
-        (cd bin/Legacy-iOS-Kit && ./restore.sh --no-version-check --no-internet-check)
+        echo "First run detected. Configuring dependencies..."
+        # Force execution using bash to bypass any lingering permission issues
+        (cd bin/Legacy-iOS-Kit && bash ./restore.sh --no-version-check --no-internet-check)
 
         if [[ "$SYS_OS" == "Linux" ]]; then
             if command -v dnf >/dev/null; then
                 dnf install -y libimobiledevice libimobiledevice-utils expect idevicerestore irecovery
-                update-crypto-policies --set LEGACY > /dev/null 2>&1
             elif command -v apt >/dev/null; then
                 apt update && apt install -y expect libimobiledevice libimobiledevice-utils idevicerestore irecovery
             fi
         fi
         echo "Dependencies installed. Disconnect and reconnect your iPad's USB cable, then press Enter."
         read -r
-    fi
-
-    if [[ "$SYS_OS" == "Linux" && -x "$(command -v dnf)" ]]; then
-        update-crypto-policies --set LEGACY > /dev/null 2>&1
-        setenforce 0 2>/dev/null
-    elif [[ "$SYS_OS" == "Darwin" ]]; then
-        xattr -rc .
-        xattr -cr ./bin 2>/dev/null
     fi
 }
 
@@ -257,43 +264,31 @@ initiate_firmware_restore() {
         # A9/A9X Logic Sequence
         # ----------------------------------------------------
         
-        # 1. Getting the shcblock (pre-restore)
         while ! ls "$session_dir"/block/*-restore-shcblock2.bin >/dev/null 2>&1; do
             echo "A9 Step 1: Getting pre-restore SHCBlock..."
-            run_exploit_sequence # Runs turdusra1n -D
+            run_exploit_sequence
             turdus_merula -C "$session_dir" --get-shcblock "$ipsw_path"
             await_recovery_mode
         done
 
-        # 2. Restoring the device
-        # Note: echo 1 | is used to auto-accept the "Are you sure you want to restore?" prompt
         until echo 1 | turdus_merula -C "$session_dir" -o --load-shcblock "$session_dir"/block/*-restore-shcblock2.bin "$ipsw_path"; do
             echo "A9 Step 2: Restoring device..."
-            run_exploit_sequence # Runs turdusra1n -D
+            run_exploit_sequence
         done
 
-        # If bridge restore, we stop here.
         if [[ "$IS_PRELIMINARY_RESTORE" == "true" ]]; then
             return
         fi
 
-        # 3. Getting the shcblock (post-restore)
         while ! ls "$session_dir"/block/*-current-shcblock2.bin >/dev/null 2>&1; do
             echo "A9 Step 3: Getting post-restore SHCBlock..."
-            ( 
-                cd "$session_dir" || exit
-                turdusra1n -g 
-            )
+            ( cd "$session_dir" || exit; turdusra1n -g )
             await_recovery_mode
         done
 
-        # 4. Getting the pteblock
         while ! ls "$session_dir"/block/*-pteblock2.bin >/dev/null 2>&1; do
             echo "A9 Step 4: Generating PTEBlock..."
-            ( 
-                cd "$session_dir" || exit
-                turdusra1n -g -i image4/*signed-SEP.img4 -C block/*-current-shcblock2.bin
-            )
+            ( cd "$session_dir" || exit; turdusra1n -g -i image4/*signed-SEP.img4 -C block/*-current-shcblock2.bin )
             await_recovery_mode
         done
 
@@ -302,15 +297,12 @@ initiate_firmware_restore() {
         # A10/A10X Logic Sequence
         # ----------------------------------------------------
         echo "A10 Step 1: Restoring the device..."
-        run_exploit_sequence # Runs turdusra1n -D
+        run_exploit_sequence
 
-        # Note: echo 1 | is used to auto-accept the prompt
         until echo 1 | turdus_merula -C "$session_dir" -o "$ipsw_path"; do
             echo "Error during A10 restore. Re-exploiting..."
             run_exploit_sequence
         done
-        
-        # Files are automatically saved into the image4 folder by turdus_merula
     fi
 }
 
@@ -322,17 +314,9 @@ startup_ipad_system() {
         echo "Initiating Boot Sequence..."
 
         if [[ "$IS_A9_CHIP" == "true" ]]; then
-            # A9 Booting the device
-            (
-                cd "$session_dir" || exit
-                turdusra1n -TP block/*-pteblock2.bin
-            )
+            ( cd "$session_dir" || exit; turdusra1n -TP block/*-pteblock2.bin )
         else
-            # A10 Booting the device
-            (
-                cd "$session_dir" || exit
-                turdusra1n -t image4/*iBoot.img4 -i image4/*signed-SEP.img4 -p image4/*-SEP.im4p
-            )
+            ( cd "$session_dir" || exit; turdusra1n -t image4/*iBoot.img4 -i image4/*signed-SEP.img4 -p image4/*-SEP.im4p )
         fi
 
         echo "Payload sent. Waiting 20 seconds to verify system handoff..."
@@ -360,15 +344,15 @@ cd "\$BASE_DIR"
 
 if [[ "\$(uname)" == "Linux" ]]; then
     if [[ "\$(uname -m)" == "x86_64" ]]; then
-        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/x86_64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin"
+        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/x86_64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
     else
-        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/arm64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin"
+        PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/arm64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
     fi
     [[ "\$EUID" -ne 0 ]] && echo "Run with sudo!" && exit 1
     killall usbmuxd >/dev/null 2>&1
     usbmuxd -p >/dev/null 2>&1
 else
-    PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/macos:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_macos/bin"
+    PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/macos:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_macos/bin:\$BASE_DIR/bin/turdus_m3rula/bin"
 fi
 
 while irecovery -m 2>/dev/null | grep -q "Recovery Mode"; do
