@@ -2,7 +2,7 @@
 
 # ============================================================
 # Samuel's iPad Downgrade
-# Targeted for A9/A10/A10X iPads
+# Targeted for A9/A10/A10X iPads (iPad 5, 6, Pro Series)
 # Version: 1.0.0
 # ============================================================
 
@@ -10,7 +10,7 @@ SAM_VER="1.0.0"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
-# Enable logging via Process Substitution
+# Enable logging
 exec > >(tee session_log.txt) 2>&1
 
 # --- Global Variables ---
@@ -42,33 +42,37 @@ pair_ipad(){
 }
 
 restrict_auto_boot() {
-    echo "Configuring environment to prevent auto-booting..."
     irecovery -c "setenv auto-boot false"
     irecovery -c "saveenv"
 }
 
 await_recovery_mode() {
+    echo "Waiting for iPad to enter Recovery Mode..."
     until irecovery -m 2>/dev/null | grep -q "Recovery Mode"; do
         if irecovery -m 2>/dev/null | grep -q "DFU Mode"; then
-            echo "Action Required: iPad is in DFU Mode. Please manually reboot it into Recovery Mode using the hardware buttons."
+            echo "Action Required: iPad is in DFU Mode. Please manually hold Power + Home (or Volume Down) to reboot it into Recovery Mode."
         fi
         sleep 1
     done
+    echo "iPad is in Recovery Mode."
 }
 
 run_exploit_sequence() {
     await_recovery_mode
+    echo "------------------------------------------------"
+    echo " PREPARE FOR DFU MODE"
+    echo " The exploit tool will now run. Please follow the"
+    echo " on-screen instructions to enter DFU mode."
+    echo "------------------------------------------------"
     until turdusra1n -D; do
-        echo "Exploit failed. Re-attempting..."
+        echo "Exploit failed or device missed DFU. Re-attempting..."
         sleep 1
     done
 }
 
 parse_firmware_details() {
     local ipsw_file="$1"
-    # Extracts the version and build string (e.g., 10.3.3_14G60)
     FIRMWARE_VER=$(echo "$ipsw_file" | sed -E 's/.*_(.*_.*)_Restore\.ipsw/\1/')
-    # Extracts just the version string (e.g., 10.3.3) for A10 boot scripts
     BOOT_VER=$(echo "$ipsw_file" | sed -E 's/.*_(.*)_(.*)_Restore\.ipsw/\1/')
 }
 
@@ -82,17 +86,15 @@ set_path() {
     
     if [[ "$SYS_OS" == "Linux" ]]; then
         if [[ "$SYS_ARCH" == "x86_64" ]]; then
-            PATH="${PATH:+$PATH:}$bin_base:$legacy_base/linux/x86_64:$bin_base/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin"
+            PATH="${PATH:+$PATH:}$bin_base:$legacy_base/linux/x86_64:$bin_base/turdus_m3rula_1.3_1fc7203b_linux-amd64/bin"
         elif [[ "$SYS_ARCH" == "arm64" ]]; then
-            PATH="${PATH:+$PATH:}$bin_base:$legacy_base/linux/arm64:$bin_base/turdus_m3rula_1.1_b0ea3ee7_linux-arm64/bin"
+            PATH="${PATH:+$PATH:}$bin_base:$legacy_base/linux/arm64:$bin_base/turdus_m3rula_1.3_1fc7203b_linux-arm64/bin"
         else
             echo "Error: Linux architecture $SYS_ARCH is not supported."
             exit 1
         fi
-        echo "Configured environment for Linux ($SYS_ARCH)."
     elif [[ "$SYS_OS" == "Darwin" ]]; then
-        PATH="${PATH:+$PATH:}$bin_base:$legacy_base/macos:$bin_base/turdus_m3rula_1.1_b0ea3ee7_macos/bin"
-        echo "Configured environment for macOS."
+        PATH="${PATH:+$PATH:}$bin_base:$legacy_base/macos:$bin_base/turdus_m3rula_1.3_1fc7203b_macos/bin"
     else
         echo "Error: Operating system $SYS_OS is not supported."
         exit 1
@@ -100,14 +102,12 @@ set_path() {
 }
 
 startup() {
-    [[ ! -d data ]] && mkdir data && echo "Workspace initialized." || echo "Found existing data folder."
+    [[ ! -d data ]] && mkdir data
     mkdir -p data/ipsw
 
-    if [[ "$SYS_OS" == "Linux" ]]; then
-        if [[ "$EUID" -ne 0 ]]; then
-            echo "Error: Samuel's iPad Downgrade requires root privileges on Linux. Run with sudo."
-            exit 1
-        fi
+    if [[ "$SYS_OS" == "Linux" && "$EUID" -ne 0 ]]; then
+        echo "Error: Samuel's iPad Downgrade requires root privileges on Linux. Run with sudo."
+        exit 1
     fi
 
     if [[ ! -f "bin/Legacy-iOS-Kit/resources/firstrun" ]]; then
@@ -117,28 +117,25 @@ startup() {
             if command -v dnf >/dev/null; then
                 dnf install -y libimobiledevice libimobiledevice-utils expect idevicerestore irecovery
                 update-crypto-policies --set LEGACY > /dev/null 2>&1
-                echo "Fedora users: If the script hangs, reboot your PC and try again."
             elif command -v apt >/dev/null; then
                 apt update && apt install -y expect libimobiledevice libimobiledevice-utils idevicerestore irecovery
             fi
         fi
-
         echo "Dependencies installed. Disconnect and reconnect your iPad's USB cable, then press Enter."
         read -r
     fi
 
-    # Fix OS-specific permissions
     if [[ "$SYS_OS" == "Linux" && -x "$(command -v dnf)" ]]; then
         update-crypto-policies --set LEGACY > /dev/null 2>&1
         setenforce 0 2>/dev/null
     elif [[ "$SYS_OS" == "Darwin" ]]; then
         xattr -rc .
+        xattr -cr ./bin 2>/dev/null
     fi
 }
 
 update_existing_data() {
     if [[ -d "$1/data" ]]; then
-        echo "Migrating data from $1..."
         cp -rv "$1/data" .
     else
         echo "Error: Could not locate the data folder in $1."
@@ -159,15 +156,12 @@ scan_for_ipad() {
     echo "Scanning for a compatible A9 or A10 iPad via USB..."
 
     if irecovery -m 2>/dev/null | grep -q "DFU Mode"; then
-        echo "Device is currently in DFU Mode. Please reboot it into Recovery Mode."
         await_recovery_mode
     fi
 
     while true; do
         if irecovery -m 2>/dev/null | grep -q "Recovery Mode"; then
-            echo "Status: iPad identified in Recovery Mode."
             IS_IN_RECOVERY=true
-            
             local rec_data=$(irecovery -q 2>/dev/null)
             SERIAL_NUM=$(echo "$rec_data" | grep 'SRNM:' | awk '{print $2}')
             local prod_id=$(echo "$rec_data" | grep 'PRODUCT:' | awk '{print $2}')
@@ -189,9 +183,7 @@ scan_for_ipad() {
             break
 
         else
-            echo "Checking for iPad in Normal (Springboard) Mode..."
             pair_ipad
-            
             SERIAL_NUM=$(ideviceinfo -k SerialNumber 2>/dev/null)
             local model_type=$(ideviceinfo -k ProductType 2>/dev/null)
             local hw_plat=$(ideviceinfo -k HardwarePlatform 2>/dev/null)
@@ -246,7 +238,6 @@ evaluate_prerequisite_restore() {
         *) echo "No bridge URL available for $IPAD_MODEL. Attempting direct restore." ; return ;;
     esac
 
-    # Recursively run the restore for the bridge firmware
     initiate_firmware_restore "$bridge_url"
 }
 
@@ -258,57 +249,68 @@ initiate_firmware_restore() {
     parse_firmware_details "$ipsw_path"
 
     echo "Status: Preparing to install iOS $FIRMWARE_VER..."
-
     local session_dir="data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}"
     mkdir -p "$session_dir/block"
 
     if [[ "$IS_A9_CHIP" == "true" ]]; then
+        # ----------------------------------------------------
+        # A9/A9X Logic Sequence
+        # ----------------------------------------------------
+        
+        # 1. Getting the shcblock (pre-restore)
         while ! ls "$session_dir"/block/*-restore-shcblock2.bin >/dev/null 2>&1; do
-            echo "Step 1: Fetching Restore SHCBlock..."
-            run_exploit_sequence
-
-            if ! echo 1 | turdus_merula -C "$session_dir" --get-shcblock "$ipsw_path"; then
-                echo "Warning: Block acquisition failed. Retrying exploit..."
-                continue
-            fi
+            echo "A9 Step 1: Getting pre-restore SHCBlock..."
+            run_exploit_sequence # Runs turdusra1n -D
+            turdus_merula -C "$session_dir" --get-shcblock "$ipsw_path"
             await_recovery_mode
-            restrict_auto_boot
         done
 
-        echo "Step 2: Installing firmware to iPad..."
-        run_exploit_sequence
-
+        # 2. Restoring the device
+        # Note: echo 1 | is used to auto-accept the "Are you sure you want to restore?" prompt
         until echo 1 | turdus_merula -C "$session_dir" -o --load-shcblock "$session_dir"/block/*-restore-shcblock2.bin "$ipsw_path"; do
-            echo "Restore interrupted. Restarting exploit..."
-            run_exploit_sequence
+            echo "A9 Step 2: Restoring device..."
+            run_exploit_sequence # Runs turdusra1n -D
         done
 
+        # If bridge restore, we stop here.
         if [[ "$IS_PRELIMINARY_RESTORE" == "true" ]]; then
             return
         fi
 
+        # 3. Getting the shcblock (post-restore)
         while ! ls "$session_dir"/block/*-current-shcblock2.bin >/dev/null 2>&1; do
-            echo "Step 3: Fetching post-install SHCBlock..."
-            ( cd "$session_dir" || exit; until turdusra1n -g "$ipsw_path"; do echo "Retrying block dump..."; done )
+            echo "A9 Step 3: Getting post-restore SHCBlock..."
+            ( 
+                cd "$session_dir" || exit
+                turdusra1n -g 
+            )
             await_recovery_mode
-            restrict_auto_boot
         done
 
+        # 4. Getting the pteblock
         while ! ls "$session_dir"/block/*-pteblock2.bin >/dev/null 2>&1; do
-            echo "Step 4: Generating PTEBlock for tethered booting..."
-            ( cd "$session_dir" || exit; until turdusra1n -g -i image4/*signed-SEP.img4 -C block/*-current-shcblock2.bin "$ipsw_path"; do echo "PTE Generation failed. Retrying..."; done )
+            echo "A9 Step 4: Generating PTEBlock..."
+            ( 
+                cd "$session_dir" || exit
+                turdusra1n -g -i image4/*signed-SEP.img4 -C block/*-current-shcblock2.bin
+            )
             await_recovery_mode
-            restrict_auto_boot
         done
 
     else
-        echo "Step 1: Commencing A10/A10X Restore Sequence..."
-        run_exploit_sequence
+        # ----------------------------------------------------
+        # A10/A10X Logic Sequence
+        # ----------------------------------------------------
+        echo "A10 Step 1: Restoring the device..."
+        run_exploit_sequence # Runs turdusra1n -D
 
+        # Note: echo 1 | is used to auto-accept the prompt
         until echo 1 | turdus_merula -C "$session_dir" -o "$ipsw_path"; do
             echo "Error during A10 restore. Re-exploiting..."
             run_exploit_sequence
         done
+        
+        # Files are automatically saved into the image4 folder by turdus_merula
     fi
 }
 
@@ -316,22 +318,24 @@ startup_ipad_system() {
     await_recovery_mode
 
     while irecovery -m 2>/dev/null | grep -q "Recovery Mode"; do
-        echo "Guidance: If a 'failed to open handle' error appears, unplug and re-plug the USB cable."
-        local base_path="data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}"
+        local session_dir="data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}"
+        echo "Initiating Boot Sequence..."
 
         if [[ "$IS_A9_CHIP" == "true" ]]; then
-            until turdusra1n -TP "$base_path"/block/*-pteblock2.bin; do
-                echo "System failed to boot. Re-trying exploit..."
-                sleep 1
-            done
+            # A9 Booting the device
+            (
+                cd "$session_dir" || exit
+                turdusra1n -TP block/*-pteblock2.bin
+            )
         else
-            until turdusra1n -t "$base_path"/image4/*iBoot.img4 -i "$base_path"/image4/*signed-SEP.img4 -p "$base_path"/image4/*-SEP.im4p; do
-                echo "System failed to boot. Re-trying exploit..."
-                sleep 1
-            done
+            # A10 Booting the device
+            (
+                cd "$session_dir" || exit
+                turdusra1n -t image4/*iBoot.img4 -i image4/*signed-SEP.img4 -p image4/*-SEP.im4p
+            )
         fi
 
-        echo "Exploit payload sent. Waiting 20 seconds to verify system handoff..."
+        echo "Payload sent. Waiting 20 seconds to verify system handoff..."
         sleep 20
     done
 
@@ -342,21 +346,18 @@ write_tether_boot_script(){
     local script_name="boot_${IPAD_MODEL}_${FIRMWARE_VER}_${SERIAL_NUM}"
     rm -f *-"$SERIAL_NUM"
 
-    # Define the payload conditionally based on the chip
     local exploit_cmd=""
     if [[ "$IS_A9_CHIP" == "true" ]]; then
-        exploit_cmd="until turdusra1n -TP data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}/block/*-pteblock2.bin; do echo 'Retrying exploit...'; done"
+        exploit_cmd="( cd data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER} && turdusra1n -TP block/*-pteblock2.bin )"
     else
-        exploit_cmd="until turdusra1n -t data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}/image4/*${BOOT_VER}-iBoot.img4 -i data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}/image4/*signed-SEP.img4 -p data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER}/image4/*${BOOT_VER}-SEP.im4p; do echo 'Retrying exploit...'; done"
+        exploit_cmd="( cd data/${IPAD_MODEL}_${SERIAL_NUM}/${FIRMWARE_VER} && turdusra1n -t image4/*iBoot.img4 -i image4/*signed-SEP.img4 -p image4/*-SEP.im4p )"
     fi
 
-    # Write the script
     cat <<EOF > "$script_name"
 #!/bin/bash
 BASE_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 cd "\$BASE_DIR"
 
-# Import Paths
 if [[ "\$(uname)" == "Linux" ]]; then
     if [[ "\$(uname -m)" == "x86_64" ]]; then
         PATH="\${PATH:+\$PATH:}\$BASE_DIR/bin:\$BASE_DIR/bin/Legacy-iOS-Kit/bin/linux/x86_64:\$BASE_DIR/bin/turdus_m3rula_1.1_b0ea3ee7_linux-amd64/bin"
@@ -389,7 +390,6 @@ EOF
 # 4. MAIN EXECUTION SEQUENCE
 # ============================================================
 
-# Command line parsing
 if [[ "$1" == "-u" ]]; then
     if [[ "$#" -ne 2 ]]; then
         echo "Error: The -u argument requires the path to your old Samuel's downgrade folder."
